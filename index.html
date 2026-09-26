@@ -1,0 +1,3570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CINEVERSE — The Future of Cinema & 3D Seat POV</title>
+<meta name="description" content="Immerse yourself in next-gen cinema booking. Experience real-time 3D seat POV previews, browse nearby luxury theatres with photos, and book movie tickets in 3D.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+/* ==========================================================================
+   DESIGN TOKENS & RESET
+   ========================================================================== */
+:root {
+  --void: #050308;
+  --abyss: #0B0614;
+  --surface: #140B24;
+  --surface-raised: #1F1038;
+  --surface-border: rgba(180, 92, 255, 0.22);
+  --neon: #8B2EFF;
+  --neon-bright: #9E47FF;
+  --violet: #B45CFF;
+  --glow: #D7A6FF;
+  --cyan: #00F0FF;
+  --gold: #FFB800;
+  --star: #F6F2FF;
+  --muted: #A396B8;
+  --dark-muted: #645577;
+  --success: #00E699;
+  --danger: #FF3366;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+  --font-disp: 'Space Grotesk', -apple-system, sans-serif;
+  --font-body: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--void);
+  color: var(--star);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  position: relative;
+  min-height: 100vh;
+  background: radial-gradient(circle at 50% 0%, #17092c 0%, var(--void) 70%);
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, .disp {
+  font-family: var(--font-disp);
+  letter-spacing: -0.02em;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Scroll progress bar */
+#scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0%;
+  background: linear-gradient(90deg, var(--neon), var(--cyan), var(--glow));
+  z-index: 1000;
+  box-shadow: 0 0 12px var(--cyan);
+  transition: width 0.1s linear;
+}
+
+/* ==========================================================================
+   AMBIENT GLOWS & BACKGROUND CANVASES
+   ========================================================================== */
+.ambient-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -2;
+  overflow: hidden;
+}
+
+.aurora-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.28;
+  will-change: transform;
+  animation: floatOrb 24s ease-in-out infinite alternate;
+}
+
+.orb-1 {
+  width: 650px;
+  height: 650px;
+  background: radial-gradient(circle, #8B2EFF 0%, transparent 70%);
+  top: -150px;
+  left: -150px;
+}
+
+.orb-2 {
+  width: 550px;
+  height: 550px;
+  background: radial-gradient(circle, #00F0FF 0%, transparent 70%);
+  top: 35%;
+  right: -120px;
+  animation-duration: 30s;
+  animation-delay: -8s;
+  opacity: 0.16;
+}
+
+.orb-3 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #B45CFF 0%, transparent 70%);
+  bottom: -100px;
+  left: 20%;
+  animation-duration: 26s;
+  animation-delay: -15s;
+  opacity: 0.22;
+}
+
+@keyframes floatOrb {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate(60px, -50px) scale(1.1) rotate(90deg); }
+  100% { transform: translate(-40px, 40px) scale(0.92) rotate(180deg); }
+}
+
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(180, 92, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(180, 92, 255, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  z-index: -1;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse at 50% 50%, black 40%, transparent 80%);
+}
+
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ==========================================================================
+   NAVIGATION
+   ========================================================================== */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: rgba(11, 6, 20, 0.65);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(180, 92, 255, 0.18);
+  transition: all 0.3s ease;
+}
+
+nav.scrolled {
+  background: rgba(8, 4, 15, 0.85);
+  border-bottom-color: rgba(180, 92, 255, 0.3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.nav-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 74px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-disp);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: 0.5px;
+  color: var(--star);
+  cursor: pointer;
+}
+
+.brand-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--neon), var(--cyan));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(139, 46, 255, 0.6);
+  position: relative;
+  overflow: hidden;
+}
+
+.brand-icon::after {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background: linear-gradient(45deg, transparent 40%, rgba(255,255,255,0.7), transparent 60%);
+  animation: shineBrand 4s infinite linear;
+}
+
+@keyframes shineBrand {
+  0% { transform: translateX(-100%); }
+  50%, 100% { transform: translateX(100%); }
+}
+
+.brand-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+  z-index: 1;
+}
+
+.brand span {
+  background: linear-gradient(120deg, #fff, var(--glow), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.nav-menu {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  list-style: none;
+}
+
+.nav-item a {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  position: relative;
+  padding: 8px 0;
+  transition: color 0.25s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-item a:hover {
+  color: var(--star);
+}
+
+.nav-item a::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--neon), var(--cyan));
+  border-radius: 2px;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.nav-item a:hover::after {
+  width: 100%;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.location-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  background: rgba(31, 16, 56, 0.7);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--glow);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.location-badge:hover {
+  background: rgba(139, 46, 255, 0.2);
+  border-color: var(--violet);
+  transform: translateY(-1px);
+}
+
+.radar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cyan);
+  position: relative;
+}
+
+.radar-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--cyan);
+  animation: radarPulse 2s infinite;
+}
+
+@keyframes radarPulse {
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+.sfx-toggle {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(31, 16, 56, 0.7);
+  border: 1px solid var(--surface-border);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sfx-toggle:hover {
+  color: var(--cyan);
+  border-color: var(--cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+}
+
+.sfx-toggle.active {
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+/* ==========================================================================
+   BUTTONS & HYPER-INTERACTIVE MICRO-ANIMATIONS
+   ========================================================================== */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 13px 26px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  outline: none;
+  user-select: none;
+  overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease,
+              background 0.25s ease,
+              border-color 0.25s ease;
+  transform: translate3d(0,0,0);
+  will-change: transform, box-shadow;
+}
+
+.btn:active {
+  transform: scale(0.96) translateY(2px) !important;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--neon), #6B17DB);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 6px 24px -4px rgba(139, 46, 255, 0.65), 0 0 0 1px rgba(180, 92, 255, 0.3);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--neon-bright), #7D21F0);
+  box-shadow: 0 10px 32px -2px rgba(139, 46, 255, 0.85), 0 0 20px rgba(0, 240, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+/* Shimmer beam border */
+.btn-shimmer {
+  position: relative;
+}
+
+.btn-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(from 0deg, transparent 0deg 300deg, var(--cyan) 330deg, var(--glow) 360deg);
+  animation: rotateBorder 3.5s linear infinite;
+  z-index: -1;
+}
+
+.btn-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  background: var(--surface);
+  border-radius: inherit;
+  z-index: -1;
+}
+
+@keyframes rotateBorder {
+  to { transform: rotate(360deg); }
+}
+
+.btn-ghost {
+  background: rgba(31, 16, 56, 0.6);
+  backdrop-filter: blur(10px);
+  border-color: rgba(180, 92, 255, 0.3);
+  color: var(--star);
+}
+
+.btn-ghost:hover {
+  background: rgba(139, 46, 255, 0.25);
+  border-color: var(--glow);
+  box-shadow: 0 0 20px rgba(180, 92, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+.btn-cyan {
+  background: linear-gradient(135deg, #00C6FF, #0072FF);
+  color: #fff;
+  box-shadow: 0 6px 24px -4px rgba(0, 198, 255, 0.5);
+}
+
+.btn-cyan:hover {
+  box-shadow: 0 10px 30px -2px rgba(0, 198, 255, 0.8);
+  transform: translateY(-2px);
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+}
+
+/* Dynamic Ripple effect */
+.btn-ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, rgba(180, 92, 255, 0.4) 60%, transparent 80%);
+  transform: scale(0);
+  animation: rippleSpread 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  pointer-events: none;
+  z-index: 5;
+}
+
+@keyframes rippleSpread {
+  to { transform: scale(4); opacity: 0; }
+}
+
+/* Particle burst container */
+.particle-burst {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.spark-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: sparkFly 0.75s ease-out forwards;
+}
+
+@keyframes sparkFly {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+}
+
+/* ==========================================================================
+   HERO SECTION (3D CANVAS + PARALLAX)
+   ========================================================================== */
+#hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: 130px 0 80px;
+  overflow: hidden;
+}
+
+#heroCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.hero-vignette {
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse 90% 70% at 50% 40%, transparent 20%, var(--void) 85%),
+    linear-gradient(to top, var(--void) 0%, transparent 35%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  max-width: 860px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 18px;
+  background: rgba(139, 46, 255, 0.15);
+  border: 1px solid rgba(180, 92, 255, 0.4);
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--glow);
+  margin-bottom: 24px;
+  box-shadow: 0 0 20px rgba(139, 46, 255, 0.3);
+  animation: pulseGlow 3s infinite ease-in-out;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 15px rgba(139, 46, 255, 0.3); }
+  50% { box-shadow: 0 0 30px rgba(0, 240, 255, 0.5), 0 0 10px var(--neon); }
+}
+
+.hero-title {
+  font-size: clamp(42px, 7vw, 86px);
+  font-weight: 800;
+  line-height: 1.02;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #ffffff 30%, var(--glow) 70%, var(--cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 10px 40px rgba(139, 46, 255, 0.2);
+}
+
+.hero-description {
+  font-size: clamp(16px, 2.2vw, 20px);
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 680px;
+  margin: 0 auto 38px;
+}
+
+.hero-cta-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 50px;
+}
+
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  background: rgba(20, 11, 36, 0.55);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  padding: 24px 32px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+}
+
+.stat-item {
+  text-align: center;
+  position: relative;
+}
+
+.stat-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: -10px;
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: var(--surface-border);
+}
+
+.stat-val {
+  font-family: var(--font-disp);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--star);
+  margin-bottom: 4px;
+  background: linear-gradient(120deg, #fff, var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.stat-lbl {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ==========================================================================
+   SECTION COMMON STYLES
+   ========================================================================== */
+section {
+  padding: 90px 0;
+  position: relative;
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 40px;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.section-tag {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section-tag::before {
+  content: '';
+  width: 14px;
+  height: 2px;
+  background: var(--cyan);
+}
+
+.section-title {
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 800;
+  color: var(--star);
+  line-height: 1.15;
+}
+
+.section-desc {
+  color: var(--muted);
+  font-size: 15px;
+  margin-top: 6px;
+  max-width: 540px;
+}
+
+.filters-bar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.filters-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  padding: 8px 18px;
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.25s ease;
+}
+
+.filter-chip:hover {
+  color: var(--star);
+  border-color: var(--violet);
+  background: var(--surface-raised);
+}
+
+.filter-chip.active {
+  background: linear-gradient(135deg, var(--neon), #6B17DB);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 18px rgba(139, 46, 255, 0.45);
+}
+
+/* ==========================================================================
+   MOVIE CARDS & 3D TILT
+   ========================================================================== */
+.movie-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 28px;
+  perspective: 1200px;
+}
+
+.movie-card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 0.4s ease,
+              border-color 0.3s ease;
+  will-change: transform;
+}
+
+.movie-card:hover {
+  border-color: var(--violet);
+  box-shadow: 0 25px 50px -12px rgba(139, 46, 255, 0.45),
+              0 0 30px rgba(0, 240, 255, 0.15);
+}
+
+.poster-box {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  background: #0d071a;
+}
+
+.poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.movie-card:hover .poster-img {
+  transform: scale(1.08);
+}
+
+.poster-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(8, 4, 15, 0.2) 0%,
+    rgba(8, 4, 15, 0.4) 50%,
+    var(--surface) 98%
+  );
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 16px;
+  transition: opacity 0.3s ease;
+}
+
+.poster-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rating-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(11, 6, 20, 0.8);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 184, 0, 0.4);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.format-pill {
+  background: rgba(139, 46, 255, 0.8);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glow);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.trailer-play-btn {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(139, 46, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border: 2px solid #fff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 0 30px rgba(139, 46, 255, 0.8);
+}
+
+.movie-card:hover .trailer-play-btn {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.movie-body {
+  padding: 18px 20px 22px;
+}
+
+.movie-genre {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.movie-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--star);
+  margin-bottom: 8px;
+  line-height: 1.25;
+}
+
+.movie-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+.movie-meta-row span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.card-action-btn {
+  width: 100%;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(139, 46, 255, 0.15);
+  border: 1px solid var(--violet);
+  color: var(--star);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.card-action-btn:hover {
+  background: var(--neon);
+  border-color: var(--neon);
+  box-shadow: 0 0 25px rgba(139, 46, 255, 0.6);
+  transform: translateY(-1px);
+}
+
+/* ==========================================================================
+   THEATRES NEAR YOU SECTION (PHOTOS & AMENITIES)
+   ========================================================================== */
+.theatres-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 28px;
+}
+
+.theatre-card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 0.35s ease,
+              border-color 0.35s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.theatre-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--cyan);
+  box-shadow: 0 20px 45px -10px rgba(0, 240, 255, 0.25), 0 0 25px rgba(139, 46, 255, 0.3);
+}
+
+.theatre-photo-wrap {
+  position: relative;
+  width: 100%;
+  height: 210px;
+  overflow: hidden;
+}
+
+.theatre-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s ease;
+}
+
+.theatre-card:hover .theatre-photo {
+  transform: scale(1.06);
+}
+
+.theatre-photo-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--surface) 0%, transparent 60%);
+}
+
+.theatre-distance-tag {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: rgba(11, 6, 20, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cyan);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.theatre-status-tag {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  background: rgba(0, 230, 153, 0.2);
+  border: 1px solid var(--success);
+  color: var(--success);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.theatre-content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.theatre-name {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--star);
+  margin-bottom: 6px;
+}
+
+.theatre-address {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.theatre-amenities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.amenity-chip {
+  padding: 4px 10px;
+  background: rgba(31, 16, 56, 0.8);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--glow);
+}
+
+.showtimes-box {
+  margin-top: auto;
+  border-top: 1px solid var(--surface-border);
+  padding-top: 16px;
+}
+
+.showtimes-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.showtimes-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.time-slot-btn {
+  padding: 7px 12px;
+  background: var(--surface-raised);
+  border: 1px solid rgba(180, 92, 255, 0.3);
+  color: var(--star);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.time-slot-btn .slot-format {
+  font-size: 9px;
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.time-slot-btn:hover {
+  background: var(--neon);
+  border-color: var(--neon);
+  box-shadow: 0 0 15px rgba(139, 46, 255, 0.6);
+  transform: translateY(-2px);
+}
+
+/* ==========================================================================
+   FEATURE BANNER / 3D POV TEASER
+   ========================================================================== */
+.pov-feature-banner {
+  background: linear-gradient(135deg, rgba(31, 16, 56, 0.8), rgba(11, 6, 20, 0.95));
+  border: 1px solid rgba(180, 92, 255, 0.35);
+  border-radius: var(--radius-lg);
+  padding: 50px 40px;
+  margin: 40px 0;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6);
+}
+
+.pov-banner-glow {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(0, 240, 255, 0.2), transparent 70%);
+  top: -100px;
+  right: -50px;
+  pointer-events: none;
+}
+
+.pov-banner-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 40px;
+  align-items: center;
+}
+
+.pov-banner-text h3 {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--star);
+  margin-bottom: 16px;
+}
+
+.pov-banner-text p {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+
+.pov-perks-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 30px;
+}
+
+.pov-perk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--star);
+}
+
+.pov-perk-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(139, 46, 255, 0.2);
+  border: 1px solid var(--violet);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cyan);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   BOOKING MODAL & REVOLUTIONARY 3D SEAT POV AUDITORIUM
+   ========================================================================== */
+#bookingModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 3, 8, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow-y: auto;
+}
+
+#bookingModalOverlay.open {
+  opacity: 1;
+}
+
+.modal-card {
+  background: var(--abyss);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 1060px;
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), 0 0 50px rgba(139, 46, 255, 0.25);
+  transform: scale(0.94) translateY(20px);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+#bookingModalOverlay.open .modal-card {
+  transform: scale(1) translateY(0);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--surface-border);
+  background: rgba(20, 11, 36, 0.6);
+}
+
+.modal-title-wrap h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--star);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.modal-close-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  transition: all 0.2s ease;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 51, 102, 0.2);
+  border-color: var(--danger);
+  color: var(--danger);
+  transform: rotate(90deg);
+}
+
+.modal-steps-nav {
+  display: flex;
+  padding: 12px 28px;
+  background: rgba(11, 6, 20, 0.9);
+  border-bottom: 1px solid rgba(180, 92, 255, 0.12);
+  gap: 12px;
+}
+
+.step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(31, 16, 56, 0.5);
+  color: var(--muted);
+  border: 1px solid transparent;
+  transition: all 0.25s ease;
+}
+
+.step-pill.active {
+  background: linear-gradient(135deg, var(--neon), #6B17DB);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 15px rgba(139, 46, 255, 0.4);
+}
+
+.modal-content-area {
+  padding: 24px 28px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* 3D AUDITORIUM VIEWPORT */
+.auditorium-container {
+  position: relative;
+  width: 100%;
+  height: 440px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #020104;
+  border: 1px solid var(--surface-border);
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.9);
+}
+
+#seatThreeCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Floating Auditorium HUD */
+.auditorium-hud-top {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.view-mode-toggle {
+  display: flex;
+  background: rgba(11, 6, 20, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-full);
+  padding: 4px;
+  pointer-events: auto;
+}
+
+.mode-btn {
+  padding: 6px 16px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-btn.active {
+  background: var(--neon);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(139, 46, 255, 0.7);
+}
+
+.pov-indicator-badge {
+  background: rgba(0, 240, 255, 0.15);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  animation: pulseCyan 2s infinite;
+}
+
+@keyframes pulseCyan {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 240, 255, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(0, 240, 255, 0.8); }
+}
+
+.auditorium-hud-bottom {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.pov-instructions-card {
+  background: rgba(11, 6, 20, 0.88);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--star);
+  pointer-events: auto;
+  max-width: 320px;
+}
+
+.pov-stats-box {
+  background: rgba(11, 6, 20, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  font-size: 12px;
+  color: var(--star);
+  pointer-events: auto;
+  min-width: 250px;
+  display: none;
+}
+
+.pov-stat-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+.pov-stat-row b {
+  color: var(--cyan);
+}
+
+/* SEAT LEGEND */
+.seats-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+}
+
+.swatch-avail { background: #2A2738; border: 1px solid #4B4561; }
+.swatch-selected { background: #7E22CE; border: 1px solid #C084FC; box-shadow: 0 0 8px rgba(126, 34, 206, 0.4); }
+.swatch-occupied { background: #16141D; border: 1px solid #2B2836; }
+.swatch-vip { background: #8C5E1A; border: 1px solid #D97706; }
+
+/* SEAT SUMMARY BAR */
+.booking-summary-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 18px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.summary-selection-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.selected-seat-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.seat-chip {
+  background: rgba(139, 46, 255, 0.25);
+  border: 1px solid var(--violet);
+  color: var(--star);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.total-price-tag {
+  font-size: 24px;
+  font-family: var(--font-disp);
+  font-weight: 800;
+  color: var(--cyan);
+}
+
+/* SNACKS & CHECKOUT PANELS */
+.snacks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.snack-card {
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  text-align: center;
+  transition: all 0.25s ease;
+  position: relative;
+}
+
+.snack-card:hover {
+  border-color: var(--violet);
+  transform: translateY(-2px);
+}
+
+.snack-emoji {
+  font-size: 38px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.snack-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--star);
+  margin-bottom: 4px;
+}
+
+.snack-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cyan);
+  margin-bottom: 12px;
+}
+
+.snack-qty-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.qty-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-border);
+  color: var(--star);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.qty-btn:hover {
+  background: var(--neon);
+  border-color: var(--neon);
+}
+
+/* DIGITAL TICKET DISPLAY */
+.ticket-container {
+  max-width: 480px;
+  margin: 0 auto;
+  background: linear-gradient(145deg, #1C0F33, #0F081C);
+  border: 1px solid var(--violet);
+  border-radius: var(--radius-lg);
+  padding: 32px 28px;
+  position: relative;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(139, 46, 255, 0.4);
+}
+
+.ticket-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.ticket-qr {
+  width: 140px;
+  height: 140px;
+  margin: 16px auto;
+  background: #fff;
+  padding: 10px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ticket-divider {
+  border-top: 2px dashed rgba(180, 92, 255, 0.3);
+  margin: 20px -28px;
+  position: relative;
+}
+
+.ticket-divider::before,
+.ticket-divider::after {
+  content: '';
+  position: absolute;
+  top: -12px;
+  width: 24px;
+  height: 24px;
+  background: var(--abyss);
+  border-radius: 50%;
+}
+
+.ticket-divider::before { left: -12px; }
+.ticket-divider::after { right: -12px; }
+
+/* TOAST NOTIFICATION */
+#globalToast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: rgba(20, 11, 36, 0.95);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--violet);
+  box-shadow: 0 10px 40px rgba(139, 46, 255, 0.6);
+  color: #fff;
+  padding: 14px 24px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+#globalToast.visible {
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ==========================================================================
+   FOOTER
+   ========================================================================== */
+footer {
+  border-top: 1px solid var(--surface-border);
+  background: rgba(8, 4, 15, 0.9);
+  padding: 60px 0 30px;
+}
+
+.footer-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 40px;
+  margin-bottom: 50px;
+}
+
+.footer-col h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--star);
+  margin-bottom: 18px;
+}
+
+.footer-links {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.footer-links a:hover {
+  color: var(--cyan);
+}
+
+.footer-bottom {
+  border-top: 1px solid rgba(180, 92, 255, 0.1);
+  padding-top: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--dark-muted);
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .nav-menu { display: none; }
+  .hero-stats { grid-template-columns: repeat(2, 1fr); }
+  .stat-item:nth-child(2)::after { display: none; }
+  .pov-banner-grid { grid-template-columns: 1fr; }
+  .footer-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 600px) {
+  .hero-stats { grid-template-columns: 1fr; }
+  .stat-item::after { display: none !important; }
+  .footer-grid { grid-template-columns: 1fr; }
+  .auditorium-container { height: 350px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Scroll Progress -->
+<div id="scroll-progress"></div>
+
+<!-- Ambient Dynamic Glow Orbs -->
+<div class="ambient-bg">
+  <div class="aurora-orb orb-1"></div>
+  <div class="aurora-orb orb-2"></div>
+  <div class="aurora-orb orb-3"></div>
+</div>
+<div class="grid-overlay"></div>
+
+<!-- STICKY NAVIGATION -->
+<nav id="navbar">
+  <div class="nav-container">
+    <div class="brand" onclick="window.scrollTo({top:0, behavior:'smooth'})">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
+        </svg>
+      </div>
+      <div>CINE<span>VERSE</span></div>
+    </div>
+
+    <ul class="nav-menu">
+      <li class="nav-item"><a href="#movies">Now Showing</a></li>
+      <li class="nav-item"><a href="#theatres">Theatres Near Me</a></li>
+      <li class="nav-item"><a href="#pov-demo">3D Seat POV</a></li>
+      <li class="nav-item"><a href="#experiences">Experiences</a></li>
+    </ul>
+
+    <div class="nav-actions">
+      <div class="location-badge" id="locBadge" onclick="cycleLocation()">
+        <span class="radar-dot"></span>
+        <span id="currentLocText">Chennai · OMR</span>
+      </div>
+
+      <button class="sfx-toggle active" id="sfxBtn" title="Toggle UI Sound Effects" onclick="toggleAudioFX()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+        </svg>
+      </button>
+
+      <button class="btn btn-primary btn-sm btn-shimmer" onclick="openBooking(0)">
+        Book Tickets
+      </button>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO SECTION WITH INTERACTIVE 3D THREE.JS CANVAS -->
+<section id="hero">
+  <canvas id="heroCanvas"></canvas>
+  <div class="hero-vignette"></div>
+
+  <div class="wrap hero-content">
+    <div class="hero-badge">
+      <span>✦</span> NEXT-GEN 3D CINEMA ARCHITECTURE
+    </div>
+    <h1 class="hero-title">Step Inside The Theater Before You Reserve.</h1>
+    <p class="hero-description">
+      Never guess your view again. Immerse yourself in a full 3D auditorium simulation, preview the exact screen angle from any seat, and book with complete confidence.
+    </p>
+
+    <div class="hero-cta-group">
+      <button class="btn btn-primary btn-shimmer" onclick="document.getElementById('movies').scrollIntoView({behavior:'smooth'})">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+        Explore Movies
+      </button>
+      <button class="btn btn-ghost" onclick="openBooking(0, true)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+        Launch 3D Seat POV
+      </button>
+      <button class="btn btn-ghost" onclick="document.getElementById('theatres').scrollIntoView({behavior:'smooth'})">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        Find Theatres Near Me
+      </button>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat-item">
+        <div class="stat-val">100%</div>
+        <div class="stat-lbl">Real-Time Seat POV</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val">4K Laser</div>
+        <div class="stat-lbl">IMAX Projection</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val">64 Ch</div>
+        <div class="stat-lbl">Dolby Atmos Audio</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val">0 ₹</div>
+        <div class="stat-lbl">Convenience Fee</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MOVIES SECTION (WITH REAL POSTERS) -->
+<section id="movies">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <div class="section-tag">CINEMA ATTRACTIONS</div>
+        <h2 class="section-title">Now Showing In Theatres</h2>
+        <p class="section-desc">Experience blockbuster cinematic masterworks in premium formats with live seat POV previews.</p>
+      </div>
+      <div class="filters-bar" id="movieFilters">
+        <button class="filter-chip active" onclick="filterMovies('all', this)">All Movies</button>
+        <button class="filter-chip" onclick="filterMovies('imax', this)">IMAX 3D</button>
+        <button class="filter-chip" onclick="filterMovies('dolby', this)">Dolby Cinema</button>
+        <button class="filter-chip" onclick="filterMovies('4dx', this)">4DX Action</button>
+      </div>
+    </div>
+
+    <div class="movie-grid" id="movieGrid">
+      <!-- Generated via JavaScript with authentic poster art -->
+    </div>
+  </div>
+</section>
+
+<!-- THEATRES NEAR YOU SECTION (PHOTOS & LIVE SHOWTIMES) -->
+<section id="theatres">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <div class="section-tag">LOCAL VENUES</div>
+        <h2 class="section-title">Theatres Near You</h2>
+        <p class="section-desc">Curated ultra-luxury multiplexes within your radius. Explore authentic photos, acoustics, and instant showtimes.</p>
+      </div>
+      <div class="filters-bar">
+        <button class="filter-chip active" onclick="filterTheatres('all', this)">All Venues</button>
+        <button class="filter-chip" onclick="filterTheatres('imax', this)">IMAX Laser</button>
+        <button class="filter-chip" onclick="filterTheatres('luxe', this)">Luxe Recliners</button>
+        <button class="filter-chip" onclick="filterTheatres('4dx', this)">4DX Theatres</button>
+      </div>
+    </div>
+
+    <div class="theatres-grid" id="theatresGrid">
+      <!-- Generated via JavaScript with photos, distances, and amenities -->
+    </div>
+  </div>
+</section>
+
+<!-- 3D SEAT POV FEATURE BANNER -->
+<section id="pov-demo" style="padding-top: 20px;">
+  <div class="wrap">
+    <div class="pov-feature-banner">
+      <div class="pov-banner-glow"></div>
+      <div class="pov-banner-grid">
+        <div class="pov-banner-text">
+          <div class="section-tag" style="color:var(--cyan);">INNOVATIVE ARCHITECTURE</div>
+          <h3>True 3D Auditorium Point of View</h3>
+          <p>
+            Tired of booking a ticket only to discover your seat is too close to the screen, stuck on an uncomfortable side angle, or has obstructed view? CineVerse's 3D engine places your camera right into the seat at true eye level.
+          </p>
+          <div class="pov-perks-list">
+            <div class="pov-perk">
+              <div class="pov-perk-icon">✓</div>
+              <span>Accurate Screen Distance & Scale</span>
+            </div>
+            <div class="pov-perk">
+              <div class="pov-perk-icon">✓</div>
+              <span>Look Around 360° Inside Seat</span>
+            </div>
+            <div class="pov-perk">
+              <div class="pov-perk-icon">✓</div>
+              <span>Dolby Atmos Acoustic Sweet Spot</span>
+            </div>
+            <div class="pov-perk">
+              <div class="pov-perk-icon">✓</div>
+              <span>Live Screen Content Light Reflection</span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-shimmer" onclick="openBooking(0, true)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            Experience 3D Seat POV Simulator
+          </button>
+        </div>
+
+        <div style="position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--violet); box-shadow: 0 15px 40px rgba(139, 46, 255, 0.4);">
+          <img src="https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=1000&q=80" alt="Auditorium View" style="width: 100%; height: 320px; object-fit: cover; display: block;">
+          <div style="position: absolute; inset: 0; background: linear-gradient(to top, rgba(11,6,20,0.9), transparent 60%); display: flex; align-items: flex-end; padding: 20px;">
+            <div>
+              <span class="format-pill" style="margin-bottom: 6px; display: inline-block;">SIMULATED VIEW</span>
+              <div style="font-weight: 800; font-size: 16px;">Row D · Center Seat 6 (IMAX Sweet Spot)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMING SOON SECTION -->
+<section id="experiences">
+  <div class="wrap">
+    <div class="section-head">
+      <div>
+        <div class="section-tag">UPCOMING RELEASES</div>
+        <h2 class="section-title">Coming Soon To CineVerse</h2>
+        <p class="section-desc">Reserve priority passes and receive instant notifications the moment booking goes live.</p>
+      </div>
+    </div>
+    <div class="movie-grid" id="soonGrid">
+      <!-- Injected via JavaScript -->
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <div class="brand" style="margin-bottom: 14px;">
+          <div class="brand-icon">
+            <svg viewBox="0 0 24 24"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/></svg>
+          </div>
+          <div>CINE<span>VERSE</span></div>
+        </div>
+        <p style="color:var(--muted); font-size: 13px; line-height: 1.6; max-width: 320px;">
+          The world's premier 3D cinema ticketing experience. Precision seat sightline simulation, luxury lounge access, and digital ticketing in one seamless platform.
+        </p>
+      </div>
+      <div class="footer-col">
+        <h4>Cinemas & Screens</h4>
+        <ul class="footer-links">
+          <li><a href="#theatres">IMAX Laser Domes</a></li>
+          <li><a href="#theatres">Dolby Cinema Multiplex</a></li>
+          <li><a href="#theatres">4DX Environmental FX</a></li>
+          <li><a href="#theatres">Luxe Flatbed Recliners</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Experience</h4>
+        <ul class="footer-links">
+          <li><a href="#pov-demo">3D Seat POV Simulator</a></li>
+          <li><a href="#movies">Now Playing</a></li>
+          <li><a href="#experiences">Advance Screenings</a></li>
+          <li><a href="#">Gourmet Dine-In Menu</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Support & Info</h4>
+        <ul class="footer-links">
+          <li><a href="#">Cancellation & Refunds</a></li>
+          <li><a href="#">Accessibility Services</a></li>
+          <li><a href="#">Corporate Bookings</a></li>
+          <li><a href="#">Security & Privacy</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div>© 2026 CINEVERSE Technologies Inc. All rights reserved.</div>
+      <div>Designed with 3D WebGL & Precision Acoustics.</div>
+    </div>
+  </div>
+</footer>
+
+<!-- ==========================================================================
+     BOOKING & 3D SEAT POV INTERACTIVE MODAL
+     ========================================================================== -->
+<div id="bookingModalOverlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title-wrap">
+        <h2 id="modalMovieTitle">Select Seats</h2>
+        <div class="modal-subtitle" id="modalVenueInfo">CineVerse IMAX Laser Dome · Screen 1 (4K Dual Laser)</div>
+      </div>
+      <button class="modal-close-btn" onclick="closeModal()">&times;</button>
+    </div>
+
+    <div class="modal-steps-nav">
+      <span class="step-pill active" id="pillSeats">1 · Choose Seats & 3D POV</span>
+      <span class="step-pill" id="pillSnacks">2 · Gourmet Snacks</span>
+      <span class="step-pill" id="pillCheckout">3 · Instant Checkout</span>
+    </div>
+
+    <div class="modal-content-area">
+      <!-- STEP 1: SEATS & 3D POV -->
+      <div id="stepPanelSeats">
+        <div class="auditorium-container">
+          <canvas id="seatThreeCanvas"></canvas>
+
+          <!-- Top HUD Overlay -->
+          <div class="auditorium-hud-top">
+            <div class="view-mode-toggle">
+              <button class="mode-btn active" id="btnModeAuditorium" onclick="switchAuditoriumView(false)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+                Stadium View
+              </button>
+              <button class="mode-btn" id="btnModePOV" onclick="switchAuditoriumView(true)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                Seat POV (Sit Here)
+              </button>
+            </div>
+
+            <div class="pov-indicator-badge" id="povLiveBadge">
+              <span class="radar-dot" style="background:var(--cyan)"></span>
+              LIVE SEAT SIGHTLINE TO SCREEN
+            </div>
+          </div>
+
+          <!-- Bottom HUD Overlay -->
+          <div class="auditorium-hud-bottom">
+            <div class="pov-instructions-card" id="povInstructions">
+              <span style="color:var(--glow); font-weight:700;">Tip:</span> Click any seat to instantly preview how the giant screen looks right from that chair! Drag to orbit and inspect view.
+            </div>
+
+            <div class="pov-stats-box" id="povStatsBox">
+              <div class="pov-stat-row">Seat: <b id="povStatSeatName">Row D · Seat 6</b></div>
+              <div class="pov-stat-row">Distance: <b id="povStatDist">13.8 m to screen</b></div>
+              <div class="pov-stat-row">FOV Fill: <b id="povStatFOV">88% IMAX Reference</b></div>
+              <div class="pov-stat-row">Sightline: <b style="color:var(--success)">100% Unobstructed</b></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="seats-legend">
+          <div class="legend-item">
+            <span class="legend-swatch swatch-avail"></span> Available
+          </div>
+          <div class="legend-item">
+            <span class="legend-swatch swatch-selected"></span> Selected Seat
+          </div>
+          <div class="legend-item">
+            <span class="legend-swatch swatch-occupied"></span> Occupied
+          </div>
+          <div class="legend-item">
+            <span class="legend-swatch swatch-vip"></span> VIP Center Sweet Spot
+          </div>
+        </div>
+
+        <!-- Selection Summary -->
+        <div class="booking-summary-bar">
+          <div class="summary-selection-info">
+            <span style="font-size: 13px; color: var(--muted);">Selected Seats:</span>
+            <div class="selected-seat-chips" id="selectedSeatsChips">
+              <span style="font-size: 13px; color: var(--dark-muted);">Click seats in 3D auditorium to select</span>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 20px;">
+            <div style="text-align: right;">
+              <div style="font-size: 11px; color: var(--muted); text-transform: uppercase;">Total Ticket Price</div>
+              <div class="total-price-tag" id="ticketTotalAmount">₹ 0</div>
+            </div>
+            <button class="btn btn-primary" id="btnToSnacks" onclick="proceedToSnacks()">
+              Continue to Snacks
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M5 13h11.86l-5.43 5.43 1.42 1.42L21.14 12l-8.29-8.29-1.42 1.42L16.86 11H5v2z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: GOURMET SNACKS -->
+      <div id="stepPanelSnacks" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h3 style="font-size: 18px; color: var(--star);">Gourmet Concessions & Dining</h3>
+            <p style="font-size: 13px; color: var(--muted);">Delivered straight to your seat before the trailers roll.</p>
+          </div>
+          <div class="location-badge">Delivered to Seat</div>
+        </div>
+
+        <div class="snacks-grid" id="snacksListGrid">
+          <!-- Populated via JS -->
+        </div>
+
+        <div class="booking-summary-bar" style="margin-top: 24px;">
+          <button class="btn btn-ghost" onclick="backToStepSeats()">
+            ← Back to Seats
+          </button>
+          <div style="display: flex; align-items: center; gap: 20px;">
+            <div style="text-align: right;">
+              <div style="font-size: 11px; color: var(--muted); text-transform: uppercase;">Food & Beverages</div>
+              <div class="total-price-tag" id="snackTotalAmount">₹ 0</div>
+            </div>
+            <button class="btn btn-primary" onclick="proceedToCheckout()">
+              Proceed to Payment
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M5 13h11.86l-5.43 5.43 1.42 1.42L21.14 12l-8.29-8.29-1.42 1.42L16.86 11H5v2z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: CHECKOUT & DIGITAL PASS -->
+      <div id="stepPanelCheckout" style="display: none;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;" id="checkoutGridArea">
+          <div>
+            <h3 style="font-size: 18px; color: var(--star); margin-bottom: 16px;">Booking Order Summary</h3>
+            <div style="background: var(--surface); border-radius: var(--radius-md); padding: 20px; border: 1px solid var(--surface-border);" id="finalOrderBreakdown">
+              <!-- Summary rows -->
+            </div>
+
+            <div style="margin-top: 18px; display: flex; gap: 10px;">
+              <input type="text" id="promoInput" placeholder="Promo code (try CINEVERSE50)" style="flex:1; padding: 12px 16px; background: var(--surface-raised); border: 1px solid var(--surface-border); border-radius: var(--radius-sm); color: #fff; font-size: 13px;">
+              <button class="btn btn-ghost btn-sm" onclick="applyPromo()">Apply</button>
+            </div>
+            <div id="promoNotice" style="font-size: 12px; margin-top: 6px;"></div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="background: rgba(31, 16, 56, 0.5); border: 1px solid var(--surface-border); border-radius: var(--radius-md); padding: 20px;">
+              <div style="font-size: 13px; font-weight: 700; color: var(--glow); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+                Instant Confirmed Seat Hold
+              </div>
+              <p style="font-size: 12px; color: var(--muted); line-height: 1.5;">
+                Your chosen seats and screen point of view are securely reserved. Sandbox payment simulation enabled for instant digital ticket generation.
+              </p>
+            </div>
+
+            <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+              <button class="btn btn-primary btn-shimmer" style="width: 100%; padding: 16px;" onclick="confirmAndPay()">
+                Confirm & Pay Now (Demo)
+              </button>
+              <button class="btn btn-ghost" style="width: 100%;" onclick="backToStepSnacks()">
+                Modify Snacks
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TICKET CONFIRMED VIEW -->
+        <div id="confirmedPassView" style="display: none;">
+          <div class="ticket-container">
+            <div class="ticket-header">
+              <span class="format-pill">CONFIRMED ADMISSION</span>
+              <h2 style="font-size: 24px; margin-top: 10px;" id="ticketMovieName">Nova Horizon: Beyond Stars</h2>
+              <div style="font-size: 13px; color: var(--muted); margin-top: 4px;" id="ticketVenueName">CineVerse IMAX Laser Dome · Screen 1</div>
+            </div>
+
+            <div class="ticket-divider"></div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 13px; margin: 16px 0;">
+              <div>
+                <span style="color:var(--muted); font-size: 11px;">DATE & TIME</span>
+                <div style="font-weight: 700; color: #fff;">Today · 07:45 PM</div>
+              </div>
+              <div>
+                <span style="color:var(--muted); font-size: 11px;">SEATS</span>
+                <div style="font-weight: 800; color: var(--cyan);" id="ticketSeatList">Row D: 6, 7</div>
+              </div>
+              <div>
+                <span style="color:var(--muted); font-size: 11px;">FORMAT</span>
+                <div style="font-weight: 700; color: #fff;">IMAX 3D Laser · 12-Ch</div>
+              </div>
+              <div>
+                <span style="color:var(--muted); font-size: 11px;">BOOKING ID</span>
+                <div style="font-weight: 700; color: var(--glow);" id="ticketBookingId">CV-894729</div>
+              </div>
+            </div>
+
+            <div class="ticket-qr">
+              <svg viewBox="0 0 100 100" width="100%" height="100%">
+                <!-- Realistic decorative QR code pattern -->
+                <rect x="0" y="0" width="100" height="100" fill="#fff"/>
+                <path d="M10,10 h30 v30 h-30 z M15,15 v20 h20 v-20 z M20,20 h10 v10 h-10 z" fill="#000"/>
+                <path d="M60,10 h30 v30 h-30 z M65,15 v20 h20 v-20 z M70,20 h10 v10 h-10 z" fill="#000"/>
+                <path d="M10,60 h30 v30 h-30 z M15,65 v20 h20 v-20 z M20,70 h10 v10 h-10 z" fill="#000"/>
+                <rect x="45" y="15" width="8" height="8" fill="#000"/>
+                <rect x="45" y="30" width="8" height="8" fill="#000"/>
+                <rect x="15" y="45" width="8" height="8" fill="#000"/>
+                <rect x="30" y="45" width="8" height="8" fill="#000"/>
+                <rect x="45" y="45" width="12" height="12" fill="#000"/>
+                <rect x="65" y="45" width="8" height="8" fill="#000"/>
+                <rect x="80" y="45" width="8" height="8" fill="#000"/>
+                <rect x="60" y="65" width="12" height="8" fill="#000"/>
+                <rect x="75" y="75" width="15" height="15" fill="#000"/>
+                <rect x="50" y="80" width="10" height="8" fill="#000"/>
+              </svg>
+            </div>
+
+            <div style="text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px;">
+              Scan at auditorium turnstile · Seat POV verified
+            </div>
+
+            <div style="margin-top: 24px; text-align: center;">
+              <button class="btn btn-primary" onclick="closeModal()">Done & Save Pass</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FLOATING TOAST -->
+<div id="globalToast">
+  <span id="toastIcon">✦</span>
+  <span id="toastMsg">Notification message</span>
+</div>
+
+<!-- ==========================================================================
+     CORE JAVASCRIPT: DATA, THREE.JS 3D SCENES, POV ENGINE & AUDIO SYNTHESIZER
+     ========================================================================== -->
+<script>
+/* --------------------------------------------------------------------------
+   1. DATA REPOSITORIES (VERIFIED HIGH-RES POSTERS & THEATRE PHOTOGRAPHY)
+   -------------------------------------------------------------------------- */
+const MOVIES = [
+  {
+    id: 0,
+    title: "Nova Horizon: Beyond Stars",
+    genre: "Sci-Fi · Cosmic Odyssey",
+    duration: "2h 48m",
+    rating: "8.9",
+    votes: "42.8k",
+    format: "IMAX 3D Laser",
+    type: "imax",
+    lang: "English / Tamil",
+    poster: "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&q=80",
+    desc: "A courageous deep-space expedition ventures beyond the event horizon into a breathtaking cosmic nexus where reality bends.",
+    price: 280
+  },
+  {
+    id: 1,
+    title: "Quantum Heist: Neo Tokyo",
+    genre: "Cyberpunk · High-Stakes Action",
+    duration: "2h 15m",
+    rating: "8.6",
+    votes: "38.1k",
+    format: "Dolby Cinema 4K",
+    type: "dolby",
+    lang: "English / Hindi",
+    poster: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&q=80",
+    desc: "In rain-soaked 2099 Neo Tokyo, an outlaw syndicate infiltrates the world's most guarded quantum neural core.",
+    price: 250
+  },
+  {
+    id: 2,
+    title: "The Crimson Tide: Phantom Realm",
+    genre: "Supernatural Thriller · Noir",
+    duration: "2h 08m",
+    rating: "8.2",
+    votes: "29.4k",
+    format: "Dolby Atmos",
+    type: "dolby",
+    lang: "Tamil / Telugu",
+    poster: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800&q=80",
+    desc: "An unsolved maritime disappearance leads an occult investigator to a fog-bound coastal lighthouse harboring ancient secrets.",
+    price: 220
+  },
+  {
+    id: 3,
+    title: "Chrono Revelation: The Last Orbit",
+    genre: "Hard Sci-Fi · Time Relativity",
+    duration: "2h 55m",
+    rating: "9.1",
+    votes: "61.3k",
+    format: "IMAX 70mm Dual Laser",
+    type: "imax",
+    lang: "English",
+    poster: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80",
+    desc: "When orbital communications blackout worldwide, an astronaut stranded in higher-dimensional space holds the key to mankind's future.",
+    price: 320
+  },
+  {
+    id: 4,
+    title: "Iron Monsoon: Overdrive",
+    genre: "High-Octane · 4DX Chase",
+    duration: "2h 12m",
+    rating: "8.4",
+    votes: "26.7k",
+    format: "4DX Dynamic Motion",
+    type: "4dx",
+    lang: "Tamil / Hindi",
+    poster: "https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&q=80",
+    desc: "Custom high-speed vehicles clash across torrential night city highways under torrential rain with real motion seat feedback.",
+    price: 300
+  },
+  {
+    id: 5,
+    title: "Silent Constellations",
+    genre: "Romantic Fantasy · Visual Masterpiece",
+    duration: "2h 20m",
+    rating: "8.8",
+    votes: "33.9k",
+    format: "Dolby Vision",
+    type: "dolby",
+    lang: "English / Tamil",
+    poster: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=800&q=80",
+    desc: "Two astronomers living across parallel centuries communicate solely through celestial alignments and stellar light waves.",
+    price: 240
+  }
+];
+
+const UPCOMING = [
+  {
+    title: "Apex Horizon: Eclipse",
+    genre: "Sci-Fi Action",
+    date: "Releasing Oct 18",
+    poster: "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=800&q=80"
+  },
+  {
+    title: "The Glass Kingdom",
+    genre: "Fantasy Adventure",
+    date: "Releasing Nov 02",
+    poster: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&q=80"
+  },
+  {
+    title: "Vortex Velocity",
+    genre: "4DX Cyber Racing",
+    date: "Releasing Nov 16",
+    poster: "https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800&q=80"
+  }
+];
+
+const THEATRES = [
+  {
+    id: 0,
+    name: "CineVerse IMAX Laser Dome",
+    distance: "1.8 km away",
+    location: "OMR IT Corridor, Navalur, Chennai",
+    photo: "https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=1000&q=80",
+    badges: ["IMAX 4K Laser", "12-Channel Audio", "Plush Rockers"],
+    type: "imax",
+    amenities: ["Dual 4K Laser", "Dolby Atmos", "Valet Parking", "Gourmet Dine-In"],
+    showtimes: [
+      { time: "10:15 AM", fmt: "IMAX 3D" },
+      { time: "01:45 PM", fmt: "Laser 4K" },
+      { time: "05:30 PM", fmt: "IMAX 3D" },
+      { time: "09:15 PM", fmt: "Night Owl" }
+    ]
+  },
+  {
+    id: 1,
+    name: "PVR INOX Luxe Grand Recliner",
+    distance: "3.4 km away",
+    location: "Marina Mall OMR, Egattur",
+    photo: "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=1000&q=80",
+    badges: ["180° Recliners", "Butler on Call", "Dolby Atmos"],
+    type: "luxe",
+    amenities: ["Motorized Recliners", "Private Chef Menu", "Blanket & Pillow", "Dolby 64-Ch"],
+    showtimes: [
+      { time: "11:00 AM", fmt: "Luxe VIP" },
+      { time: "02:30 PM", fmt: "Luxe VIP" },
+      { time: "06:45 PM", fmt: "Dolby Atmos" },
+      { time: "10:00 PM", fmt: "Midnight" }
+    ]
+  },
+  {
+    id: 2,
+    name: "Palazzo Dolby Cinema Multiplex",
+    distance: "6.2 km away",
+    location: "Forum Grand Central, Chennai",
+    photo: "https://images.unsplash.com/photo-1595769816263-9b910be24d5f?w=1000&q=80",
+    badges: ["Dolby Vision HDR", "Floor Subwoofers", "Curved Screen"],
+    type: "dolby",
+    amenities: ["1,000,000:1 Contrast", "Spatial Audio", "Arcade Zone", "Patisserie"],
+    showtimes: [
+      { time: "10:30 AM", fmt: "Dolby Cinema" },
+      { time: "01:15 PM", fmt: "Dolby Vision" },
+      { time: "04:45 PM", fmt: "Dolby Vision" },
+      { time: "08:15 PM", fmt: "Dolby Cinema" }
+    ]
+  },
+  {
+    id: 3,
+    name: "AGS Dynamic 4DX Arena",
+    distance: "7.9 km away",
+    location: "OMR Entertainment Hub, Navalur",
+    photo: "https://images.unsplash.com/photo-1574267432553-4b4628081c31?w=1000&q=80",
+    badges: ["4DX Motion Sync", "Water & Fog FX", "Lightning Strobes"],
+    type: "4dx",
+    amenities: ["21 Environmental FX", "Heated Seats", "3D Projection", "Gaming Lounge"],
+    showtimes: [
+      { time: "11:30 AM", fmt: "4DX 3D" },
+      { time: "03:15 PM", fmt: "4DX 3D" },
+      { time: "07:00 PM", fmt: "4DX 3D" },
+      { time: "10:30 PM", fmt: "Late Night" }
+    ]
+  }
+];
+
+const SNACKS = [
+  { id: 0, name: "Truffle Butter Popcorn", emoji: "🍿", price: 210, desc: "Freshly popped with European truffle butter" },
+  { id: 1, name: "Artisan Loaded Nachos", emoji: "🧀", price: 240, desc: "Warm queso, guacamole and fire salsa" },
+  { id: 2, name: "Electric Blue Slush", emoji: "🥤", price: 160, desc: "Chilled raspberry with glowing neon straw" },
+  { id: 3, name: "Gourmet Truffle Burger", emoji: "🍔", price: 260, desc: "Brioche bun with carmelized onions" },
+  { id: 4, name: "Crispy Peri Peri Fries", emoji: "🍟", price: 180, desc: "Seasoned with spicy bird's eye chili" },
+  { id: 5, name: "Belgian Choco Sundae", emoji: "🍨", price: 190, desc: "Dark chocolate ganache with almond flakes" }
+];
+
+/* --------------------------------------------------------------------------
+   2. WEB AUDIO API SYNTHESIZER (ZERO-DEPENDENCY TACTILE UI SOUND EFFECTS)
+   -------------------------------------------------------------------------- */
+let audioCtx = null;
+let sfxEnabled = true;
+
+function initAudio() {
+  if (!audioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      audioCtx = new AudioContextClass();
+    }
+  }
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+function playSound(type) {
+  if (!sfxEnabled) return;
+  try {
+    initAudio();
+    if (!audioCtx) return;
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const now = audioCtx.currentTime;
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (type === 'hover') {
+      // Soft high-tech subtle micro-blip
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(540, now);
+      osc.frequency.exponentialRampToValueAtTime(780, now + 0.05);
+      gain.gain.setValueAtTime(0.03, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+      osc.start(now);
+      osc.stop(now + 0.05);
+    } else if (type === 'click') {
+      // Crisp satisfying tactile click
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(240, now);
+      osc.frequency.exponentialRampToValueAtTime(80, now + 0.08);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+      osc.start(now);
+      osc.stop(now + 0.08);
+    } else if (type === 'select') {
+      // Pleasant harmonic chime for seat selection
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    } else if (type === 'pov') {
+      // Cinematic whoosh transition sound
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(120, now);
+      osc.frequency.exponentialRampToValueAtTime(320, now + 0.35);
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc.start(now);
+      osc.stop(now + 0.4);
+    }
+  } catch (err) {
+    // Audio policy fallback
+  }
+}
+
+function toggleAudioFX() {
+  sfxEnabled = !sfxEnabled;
+  const btn = document.getElementById('sfxBtn');
+  btn.classList.toggle('active', sfxEnabled);
+  showToast(sfxEnabled ? "🔊 Sound FX Enabled" : "🔇 Sound FX Muted");
+}
+
+/* --------------------------------------------------------------------------
+   3. RENDER CARDS & DYNAMIC UI
+   -------------------------------------------------------------------------- */
+function renderMoviesList(filter = 'all') {
+  const container = document.getElementById('movieGrid');
+  const filtered = filter === 'all' ? MOVIES : MOVIES.filter(m => m.type === filter);
+
+  container.innerHTML = filtered.map(m => `
+    <div class="movie-card" onclick="openBooking(${m.id})">
+      <div class="poster-box">
+        <img class="poster-img" src="${m.poster}" alt="${m.title}" loading="lazy">
+        <div class="poster-overlay">
+          <div class="poster-top">
+            <span class="rating-badge">★ ${m.rating}</span>
+            <span class="format-pill">${m.format}</span>
+          </div>
+          <div class="trailer-play-btn" title="View 3D Seat POV">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="movie-body">
+        <div class="movie-genre">${m.genre}</div>
+        <h3 class="movie-name">${m.title}</h3>
+        <div class="movie-meta-row">
+          <span>⏱ ${m.duration}</span>
+          <span>•</span>
+          <span>🗣 ${m.lang}</span>
+        </div>
+        <button class="card-action-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+          Select Seats & 3D POV
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterMovies(type, btn) {
+  playSound('click');
+  document.querySelectorAll('#movieFilters .filter-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  renderMoviesList(type);
+}
+
+function renderTheatresList(filter = 'all') {
+  const container = document.getElementById('theatresGrid');
+  const filtered = filter === 'all' ? THEATRES : THEATRES.filter(t => t.type === filter);
+
+  container.innerHTML = filtered.map(t => `
+    <div class="theatre-card">
+      <div class="theatre-photo-wrap">
+        <img class="theatre-photo" src="${t.photo}" alt="${t.name}" loading="lazy">
+        <div class="theatre-photo-gradient"></div>
+        <div class="theatre-distance-tag">
+          <span class="radar-dot" style="background:var(--cyan)"></span>
+          ${t.distance}
+        </div>
+        <div class="theatre-status-tag">Live Showtimes</div>
+      </div>
+      <div class="theatre-content">
+        <h3 class="theatre-name">${t.name}</h3>
+        <div class="theatre-address">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          ${t.location}
+        </div>
+        <div class="theatre-amenities">
+          ${t.amenities.map(a => `<span class="amenity-chip">✦ ${a}</span>`).join('')}
+        </div>
+        <div class="showtimes-box">
+          <div class="showtimes-label">
+            <span>Today's Screenings</span>
+            <span style="color:var(--cyan); font-weight:700;">Select Time</span>
+          </div>
+          <div class="showtimes-row">
+            ${t.showtimes.map(s => `
+              <button class="time-slot-btn" onclick="openBooking(0, false, '${t.name}')">
+                <span>${s.time}</span>
+                <span class="slot-format">${s.fmt}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function filterTheatres(type, btn) {
+  playSound('click');
+  btn.parentElement.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  renderTheatresList(type);
+}
+
+function renderUpcoming() {
+  const container = document.getElementById('soonGrid');
+  container.innerHTML = UPCOMING.map(u => `
+    <div class="movie-card" style="cursor:default">
+      <div class="poster-box" style="height:320px;">
+        <img class="poster-img" src="${u.poster}" alt="${u.title}" loading="lazy">
+        <div class="poster-overlay">
+          <span class="format-pill">${u.date}</span>
+        </div>
+      </div>
+      <div class="movie-body">
+        <div class="movie-genre">${u.genre}</div>
+        <h3 class="movie-name">${u.title}</h3>
+        <button class="card-action-btn" onclick="showToast('Reminder set for ${u.title}!')">
+          🔔 Notify on Advance Booking
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* --------------------------------------------------------------------------
+   4. THREE.JS HERO BACKGROUND WITH 3D SCROLL REACTIVITY
+   -------------------------------------------------------------------------- */
+let heroScene, heroCamera, heroRenderer, portalGroup, heroStarMesh;
+let heroScrollY = 0;
+
+function initHeroScene() {
+  const canvas = document.getElementById('heroCanvas');
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
+  heroRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  heroRenderer.setSize(w, h);
+  heroRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  heroScene = new THREE.Scene();
+  heroCamera = new THREE.PerspectiveCamera(55, w / h, 0.1, 100);
+  heroCamera.position.set(0, 1.2, 10);
+
+  // 1500 Glowing Stars
+  const starGeo = new THREE.BufferGeometry();
+  const starCount = 1400;
+  const positions = new Float32Array(starCount * 3);
+  const colors = new Float32Array(starCount * 3);
+
+  const starColorPalette = [
+    new THREE.Color(0xD7A6FF),
+    new THREE.Color(0x8B2EFF),
+    new THREE.Color(0x00F0FF),
+    new THREE.Color(0xFFFFFF)
+  ];
+
+  for (let i = 0; i < starCount; i++) {
+    positions[i * 3] = (Math.random() - 0.5) * 50;
+    positions[i * 3 + 1] = (Math.random() - 0.5) * 35;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 45;
+
+    const col = starColorPalette[Math.floor(Math.random() * starColorPalette.length)];
+    colors[i * 3] = col.r;
+    colors[i * 3 + 1] = col.g;
+    colors[i * 3 + 2] = col.b;
+  }
+
+  starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  const starMat = new THREE.PointsMaterial({
+    size: 0.08,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.8
+  });
+  heroStarMesh = new THREE.Points(starGeo, starMat);
+  heroScene.add(heroStarMesh);
+
+  // Holographic 3D Rings
+  portalGroup = new THREE.Group();
+  for (let i = 0; i < 5; i++) {
+    const radius = 2.4 + i * 1.1;
+    const ringGeo = new THREE.TorusGeometry(radius, 0.025, 16, 100);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: i % 2 === 0 ? 0x8B2EFF : 0x00F0FF,
+      transparent: true,
+      opacity: 0.4 - i * 0.06
+    });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    ringMesh.rotation.x = Math.PI / 2.2;
+    ringMesh.position.z = -3 - i * 1.8;
+    portalGroup.add(ringMesh);
+  }
+  heroScene.add(portalGroup);
+
+  // Dynamic Point Lights
+  const light1 = new THREE.PointLight(0x8B2EFF, 4, 30);
+  light1.position.set(-5, 4, 2);
+  heroScene.add(light1);
+
+  const light2 = new THREE.PointLight(0x00F0FF, 3, 30);
+  light2.position.set(5, -3, 2);
+  heroScene.add(light2);
+
+  // Mouse Parallax
+  let mouseX = 0, mouseY = 0;
+  window.addEventListener('mousemove', e => {
+    mouseX = (e.clientX / window.innerWidth - 0.5);
+    mouseY = (e.clientY / window.innerHeight - 0.5);
+  });
+
+  window.addEventListener('resize', () => {
+    const rw = window.innerWidth;
+    const rh = window.innerHeight;
+    heroRenderer.setSize(rw, rh);
+    heroCamera.aspect = rw / rh;
+    heroCamera.updateProjectionMatrix();
+  });
+
+  function animateHero(time) {
+    requestAnimationFrame(animateHero);
+
+    // Subtle continuous rotation
+    portalGroup.rotation.z += 0.0012;
+    heroStarMesh.rotation.y += 0.0003;
+
+    // React to 3D scroll depth
+    const scrollFactor = window.scrollY * 0.002;
+    heroCamera.position.z = 10 - scrollFactor * 3;
+    portalGroup.position.y = -scrollFactor * 2;
+    portalGroup.rotation.x = scrollFactor * 0.5;
+
+    // React to mouse
+    heroCamera.position.x += (mouseX * 1.5 - heroCamera.position.x) * 0.04;
+    heroCamera.position.y += (1.2 - mouseY * 1.2 - heroCamera.position.y) * 0.04;
+    heroCamera.lookAt(0, 0, -4);
+
+    heroRenderer.render(heroScene, heroCamera);
+  }
+  animateHero(0);
+}
+
+/* --------------------------------------------------------------------------
+   5. REVOLUTIONARY 3D SEAT POV AUDITORIUM SIMULATOR
+   -------------------------------------------------------------------------- */
+const AUD_ROWS = 6;
+const AUD_COLS = 10;
+let seatScene, seatCamera, seatRenderer;
+let auditoriumGroup, screenMesh, screenCanvas, screenCtx, screenTexture;
+let seatMeshes = [];
+let seatStateMap = {};
+let selectedSeatKeys = [];
+let isPOVActive = false;
+let currentActiveSeat = null;
+
+// Camera Tweening
+let povAnimationId = null;
+const SCREEN_Z = -7.0;
+const SCREEN_Y = 2.7;
+let savedAuditoriumCamPos = new THREE.Vector3(0, 5.2, 8.2);
+let savedAuditoriumCamLook = new THREE.Vector3(0, 2.1, -3.5);
+
+// Refined, elegant cinema upholstery colors (Reduced neon glare)
+const SEAT_COLORS = {
+  available: 0x2A2738, // Rich dark charcoal navy velvet
+  vip: 0x8C5E1A,       // Warm burnished luxury amber velvet
+  occupied: 0x16141D,  // Muted dark matte charcoal
+  selected: 0x7E22CE   // Royal cinema violet velvet
+};
+
+function generateSeatData() {
+  seatStateMap = {};
+  for (let r = 0; r < AUD_ROWS; r++) {
+    for (let c = 0; c < AUD_COLS; c++) {
+      const key = `${r}-${c}`;
+      let status = 'available';
+
+      // Center Sweet Spot Rows (C, D in middle) are VIP
+      if ((r === 2 || r === 3) && (c >= 3 && c <= 6)) {
+        status = 'vip';
+      }
+
+      // Simulate a few occupied seats
+      if (Math.random() < 0.22 && status !== 'vip') {
+        status = 'occupied';
+      }
+
+      seatStateMap[key] = status;
+    }
+  }
+}
+
+function initAuditoriumScene() {
+  const container = document.querySelector('.auditorium-container');
+  const canvas = document.getElementById('seatThreeCanvas');
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+
+  seatRenderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  seatRenderer.setSize(w, h);
+  seatRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  seatScene = new THREE.Scene();
+  seatScene.background = new THREE.Color(0x07060A);
+
+  seatCamera = new THREE.PerspectiveCamera(52, w / h, 0.1, 70);
+  seatCamera.position.copy(savedAuditoriumCamPos);
+  seatCamera.lookAt(savedAuditoriumCamLook);
+  seatCamera.userData.currentLook = savedAuditoriumCamLook.clone();
+
+  auditoriumGroup = new THREE.Group();
+  seatScene.add(auditoriumGroup);
+
+  // --- Curved Giant IMAX Cinema Screen (Directly in FRONT of all seats) ---
+  screenCanvas = document.createElement('canvas');
+  screenCanvas.width = 1024;
+  screenCanvas.height = 512;
+  screenCtx = screenCanvas.getContext('2d');
+  screenTexture = new THREE.CanvasTexture(screenCanvas);
+
+  const screenWidth = 12.2;
+  const screenHeight = 5.2;
+  const segX = 32, segY = 16;
+  const screenGeo = new THREE.PlaneGeometry(screenWidth, screenHeight, segX, segY);
+
+  // Curve parabolic screen concave towards audience in positive Z:
+  const posAttr = screenGeo.attributes.position;
+  for (let i = 0; i < posAttr.count; i++) {
+    const px = posAttr.getX(i);
+    const pz = (px * px) * 0.022; // edges wrap forward towards audience
+    posAttr.setZ(i, pz);
+  }
+  screenGeo.computeVertexNormals();
+
+  const screenMat = new THREE.MeshBasicMaterial({
+    map: screenTexture,
+    side: THREE.DoubleSide
+  });
+
+  screenMesh = new THREE.Mesh(screenGeo, screenMat);
+  screenMesh.position.set(0, SCREEN_Y, SCREEN_Z);
+  auditoriumGroup.add(screenMesh);
+
+  // Sleek black screen frame border & stage below
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0x09080E, roughness: 0.9 });
+  const hBorderGeo = new THREE.BoxGeometry(screenWidth + 0.4, 0.16, 0.3);
+  const topBorder = new THREE.Mesh(hBorderGeo, frameMat);
+  topBorder.position.set(0, SCREEN_Y + screenHeight / 2 + 0.08, SCREEN_Z);
+  auditoriumGroup.add(topBorder);
+
+  const btmBorder = new THREE.Mesh(hBorderGeo, frameMat);
+  btmBorder.position.set(0, SCREEN_Y - screenHeight / 2 - 0.08, SCREEN_Z);
+  auditoriumGroup.add(btmBorder);
+
+  // Cinema Stage base under screen
+  const stageGeo = new THREE.BoxGeometry(15, 0.35, 3.2);
+  const stageMat = new THREE.MeshStandardMaterial({ color: 0x0E0C14, roughness: 0.85 });
+  const stageMesh = new THREE.Mesh(stageGeo, stageMat);
+  stageMesh.position.set(0, 0.17, SCREEN_Z + 1.2);
+  auditoriumGroup.add(stageMesh);
+
+  // Soft, subdued cinema lighting (Eliminating harsh neon glare)
+  const screenGlowLight = new THREE.PointLight(0xD8DDE6, 0.45, 18);
+  screenGlowLight.position.set(0, 2.7, SCREEN_Z + 1.5);
+  seatScene.add(screenGlowLight);
+
+  const ambientLight = new THREE.AmbientLight(0x24202E, 0.75);
+  seatScene.add(ambientLight);
+
+  const ceilingLight = new THREE.DirectionalLight(0xF4EEFF, 0.45);
+  ceilingLight.position.set(0, 7.5, 2.0);
+  seatScene.add(ceilingLight);
+
+  // Cinema Tiered Floor
+  const floorGeo = new THREE.BoxGeometry(14, 0.2, 12);
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x0A0910, roughness: 0.9 });
+  const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+  floorMesh.position.set(0, 0.2, 0.5);
+  auditoriumGroup.add(floorMesh);
+
+  // Subtle floor guide lights (soft amber/purple, not blinding neon)
+  for (let side of [-4.2, 4.2]) {
+    const stripGeo = new THREE.BoxGeometry(0.1, 0.04, 11);
+    const stripMat = new THREE.MeshBasicMaterial({ color: 0x48345C });
+    const strip = new THREE.Mesh(stripGeo, stripMat);
+    strip.position.set(side, 0.31, 0.5);
+    auditoriumGroup.add(strip);
+  }
+
+  // Generate 3D Tiered Chairs (Facing forward towards -Z at the screen!)
+  seatMeshes = [];
+  const seatCushionGeo = new THREE.BoxGeometry(0.56, 0.12, 0.48);
+  const seatBackGeo = new THREE.BoxGeometry(0.56, 0.52, 0.12);
+  const seatHeadGeo = new THREE.BoxGeometry(0.42, 0.18, 0.14);
+  const seatArmGeo = new THREE.BoxGeometry(0.08, 0.22, 0.44);
+  const armMat = new THREE.MeshStandardMaterial({ color: 0x14121A, roughness: 0.9, metalness: 0.05 });
+
+  for (let r = 0; r < AUD_ROWS; r++) {
+    for (let c = 0; c < AUD_COLS; c++) {
+      const key = `${r}-${c}`;
+      const status = seatStateMap[key];
+
+      const seatGroup = new THREE.Group();
+
+      // Tiered Riser Calculations (Row A is closest to screen, Row F is highest at the back)
+      const colOffset = (c - (AUD_COLS - 1) / 2);
+      const x = colOffset * 0.78;
+      const y = 0.38 + r * 0.35; // Stadium stepped riser height
+      const arcOffset = (x * x) * 0.022; // gentle arc towards screen
+      const z = (-3.2 + r * 1.4) + arcOffset;
+
+      const chairMat = new THREE.MeshStandardMaterial({
+        color: SEAT_COLORS[status],
+        roughness: 0.85,
+        metalness: 0.02
+      });
+
+      // Cushion at center
+      const cushion = new THREE.Mesh(seatCushionGeo, chairMat);
+      cushion.position.set(0, 0, 0);
+
+      // Backrest behind back (+Z relative to cushion because audience looks forward towards -Z)
+      const back = new THREE.Mesh(seatBackGeo, chairMat);
+      back.position.set(0, 0.26, 0.20);
+      back.rotation.x = -0.08; // slightly reclined backwards
+
+      // Headrest
+      const head = new THREE.Mesh(seatHeadGeo, chairMat);
+      head.position.set(0, 0.56, 0.22);
+
+      // Armrests
+      const armL = new THREE.Mesh(seatArmGeo, armMat);
+      armL.position.set(-0.31, 0.1, 0.02);
+      const armR = new THREE.Mesh(seatArmGeo, armMat);
+      armR.position.set(0.31, 0.1, 0.02);
+
+      seatGroup.add(cushion);
+      seatGroup.add(back);
+      seatGroup.add(head);
+      seatGroup.add(armL);
+      seatGroup.add(armR);
+
+      // Angle side chairs slightly towards center screen
+      seatGroup.rotation.y = -x * 0.035;
+      seatGroup.position.set(x, y, z);
+
+      seatGroup.userData = {
+        r, c, key,
+        status,
+        backMesh: back,
+        cushionMesh: cushion,
+        headMesh: head,
+        worldX: x,
+        worldY: y,
+        worldZ: z
+      };
+
+      auditoriumGroup.add(seatGroup);
+      seatMeshes.push(seatGroup);
+    }
+  }
+
+  // Interactive Raycasting on Seats
+  const raycaster = new THREE.Raycaster();
+  const mouseVec = new THREE.Vector2();
+
+  canvas.onclick = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mouseVec.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouseVec.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouseVec, seatCamera);
+    const intersects = raycaster.intersectObjects(auditoriumGroup.children, true);
+
+    if (intersects.length > 0) {
+      let clickedGroup = intersects[0].object;
+      while (clickedGroup.parent && clickedGroup.parent !== auditoriumGroup) {
+        clickedGroup = clickedGroup.parent;
+      }
+
+      if (clickedGroup.userData && clickedGroup.userData.key) {
+        handleSeatClick(clickedGroup.userData);
+      }
+    }
+  };
+
+  // Drag Orbit Controls for Auditorium
+  let isDragging = false;
+  let lastMouseX = 0, lastMouseY = 0;
+  let orbitRotY = 0, orbitRotX = 0;
+
+  canvas.addEventListener('mousedown', e => {
+    isDragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+  });
+
+  window.addEventListener('mouseup', () => { isDragging = false; });
+
+  canvas.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - lastMouseX;
+    const deltaY = e.clientY - lastMouseY;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+
+    if (!isPOVActive) {
+      orbitRotY -= deltaX * 0.005;
+      orbitRotX -= deltaY * 0.003;
+      orbitRotX = Math.max(-0.35, Math.min(0.45, orbitRotX));
+
+      const radius = 8.6;
+      seatCamera.position.x = Math.sin(orbitRotY) * radius;
+      seatCamera.position.z = Math.cos(orbitRotY) * radius + 1.2;
+      seatCamera.position.y = 5.2 + orbitRotX * 4;
+      seatCamera.lookAt(savedAuditoriumCamLook);
+    } else {
+      // In POV mode: Free head look (look left/right/up/down inside seat!)
+      const lookOffset = seatCamera.userData.currentLook || new THREE.Vector3(0, SCREEN_Y, SCREEN_Z);
+      lookOffset.x += deltaX * 0.012;
+      lookOffset.y -= deltaY * 0.012;
+      lookOffset.y = Math.max(0.6, Math.min(5.2, lookOffset.y));
+      seatCamera.lookAt(lookOffset);
+    }
+  });
+
+  // Animated Cinematic Movie Trailer Canvas on Screen
+  let trailerFrame = 0;
+  function updateMovieScreenCanvas() {
+    trailerFrame++;
+    const cw = screenCanvas.width;
+    const ch = screenCanvas.height;
+
+    // Cinematic deep cosmic background
+    screenCtx.fillStyle = '#06050A';
+    screenCtx.fillRect(0, 0, cw, ch);
+
+    // Subtle, soft animated space nebula
+    const t = trailerFrame * 0.012;
+    const grad = screenCtx.createRadialGradient(
+      cw * 0.5 + Math.sin(t) * 90, ch * 0.5 + Math.cos(t * 0.7) * 40, 15,
+      cw * 0.5, ch * 0.5, 360
+    );
+    grad.addColorStop(0, 'rgba(100, 70, 160, 0.85)');
+    grad.addColorStop(0.35, 'rgba(40, 25, 75, 0.7)');
+    grad.addColorStop(0.75, 'rgba(15, 10, 30, 0.9)');
+    grad.addColorStop(1, '#050408');
+
+    screenCtx.fillStyle = grad;
+    screenCtx.fillRect(0, 0, cw, ch);
+
+    // 2.39:1 Cinemascope letterbox black bars
+    const letterboxH = 40;
+    screenCtx.fillStyle = '#000000';
+    screenCtx.fillRect(0, 0, cw, letterboxH);
+    screenCtx.fillRect(0, ch - letterboxH, cw, letterboxH);
+
+    // Subtle audio waveform / frequency visualizer along bottom letterbox edge
+    const barCount = 44;
+    const barWidth = cw / barCount;
+    screenCtx.fillStyle = 'rgba(215, 166, 255, 0.45)';
+    for (let i = 0; i < barCount; i++) {
+      const h = Math.abs(Math.sin(t * 1.8 + i * 0.35)) * 28 + 6;
+      screenCtx.fillRect(i * barWidth, ch - letterboxH - h - 4, barWidth - 6, h);
+    }
+
+    // Screen Title Overlay (Clean, high-end typography)
+    screenCtx.fillStyle = '#F5EEFF';
+    screenCtx.font = 'bold 34px "Space Grotesk", sans-serif';
+    screenCtx.textAlign = 'center';
+    screenCtx.fillText('NOVA HORIZON · 4K DUAL LASER', cw / 2, ch / 2 - 12);
+
+    screenCtx.fillStyle = '#D7A6FF';
+    screenCtx.font = '600 16px "Plus Jakarta Sans", sans-serif';
+    screenCtx.fillText('DOLBY ATMOS 64-CHANNEL SPATIAL AUDIO', cw / 2, ch / 2 + 24);
+
+    screenTexture.needsUpdate = true;
+  }
+
+  // Animation Loop for Auditorium Scene
+  function animateAuditorium() {
+    requestAnimationFrame(animateAuditorium);
+    updateMovieScreenCanvas();
+    seatRenderer.render(seatScene, seatCamera);
+  }
+  animateAuditorium();
+}
+
+/* --------------------------------------------------------------------------
+   6. SEAT CLICK & POV FLIGHT LOGIC
+   -------------------------------------------------------------------------- */
+function handleSeatClick(seatData) {
+  if (seatData.status === 'occupied') {
+    showToast("⚠️ This seat is already occupied by another moviegoer.");
+    playSound('hover');
+    return;
+  }
+
+  playSound('select');
+  currentActiveSeat = seatData;
+
+  const key = seatData.key;
+  const idx = selectedSeatKeys.indexOf(key);
+
+  if (idx > -1) {
+    // Deselect
+    selectedSeatKeys.splice(idx, 1);
+    const origStatus = seatStateMap[key];
+    updateSeatColor(key, SEAT_COLORS[origStatus]);
+  } else {
+    // Select
+    selectedSeatKeys.push(key);
+    updateSeatColor(key, SEAT_COLORS.selected);
+  }
+
+  updateSeatSummaryUI();
+
+  // If in POV mode, fly camera immediately into this chosen seat!
+  if (isPOVActive) {
+    flyToSeatPOV(seatData);
+  } else {
+    // Update live HUD
+    updatePOVStatsHUD(seatData);
+  }
+}
+
+function updateSeatColor(key, hex) {
+  const meshGroup = seatMeshes.find(m => m.userData.key === key);
+  if (meshGroup) {
+    meshGroup.userData.backMesh.material.color.setHex(hex);
+    meshGroup.userData.cushionMesh.material.color.setHex(hex);
+    if (meshGroup.userData.headMesh) {
+      meshGroup.userData.headMesh.material.color.setHex(hex);
+    }
+  }
+}
+
+function flyToSeatPOV(seatData) {
+  if (!seatData) return;
+  playSound('pov');
+
+  // Eye-level coordinates inside this exact seat:
+  // Cushion is at seatData.worldY; eye height sitting upright is +0.65
+  const eyeX = seatData.worldX;
+  const eyeY = seatData.worldY + 0.65;
+  const eyeZ = seatData.worldZ - 0.02; // looking forward towards -Z at screen
+
+  // Screen target point (Center of screen in front)
+  const targetLook = new THREE.Vector3(0, SCREEN_Y, SCREEN_Z);
+
+  smoothCameraGlide(
+    new THREE.Vector3(eyeX, eyeY, eyeZ),
+    targetLook,
+    850,
+    () => {
+      showToast(`View from Row ${String.fromCharCode(65 + seatData.r)} · Seat ${seatData.c + 1} (${seatData.status === 'vip' ? 'VIP Sweet Spot' : 'Prime'})`);
+      updatePOVStatsHUD(seatData);
+    }
+  );
+}
+
+function switchAuditoriumView(toPOV) {
+  isPOVActive = toPOV;
+  playSound('click');
+
+  document.getElementById('btnModeAuditorium').classList.toggle('active', !toPOV);
+  document.getElementById('btnModePOV').classList.toggle('active', toPOV);
+  document.getElementById('povLiveBadge').style.display = toPOV ? 'flex' : 'none';
+  document.getElementById('povStatsBox').style.display = toPOV ? 'block' : 'none';
+
+  if (toPOV) {
+    const targetSeat = currentActiveSeat || seatMeshes[15].userData; // Default to prime sweet spot if none selected
+    currentActiveSeat = targetSeat;
+    flyToSeatPOV(targetSeat);
+  } else {
+    // Zoom back out to stadium orbit
+    playSound('pov');
+    smoothCameraGlide(
+      savedAuditoriumCamPos,
+      savedAuditoriumCamLook,
+      800,
+      () => {
+        showToast("Returned to Auditorium Stadium Overview");
+      }
+    );
+  }
+}
+
+function smoothCameraGlide(targetPos, targetLook, durationMs, onComplete) {
+  if (povAnimationId) cancelAnimationFrame(povAnimationId);
+
+  const startPos = seatCamera.position.clone();
+  const startLook = seatCamera.userData.currentLook ? seatCamera.userData.currentLook.clone() : savedAuditoriumCamLook.clone();
+  const startTime = performance.now();
+
+  function glideStep(currentTime) {
+    const elapsed = currentTime - startTime;
+    let progress = Math.min(1, elapsed / durationMs);
+
+    // Smooth cubic easeInOut
+    progress = progress < 0.5 
+      ? 4 * progress * progress * progress 
+      : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+    seatCamera.position.lerpVectors(startPos, targetPos, progress);
+    const curLook = new THREE.Vector3().lerpVectors(startLook, targetLook, progress);
+    seatCamera.lookAt(curLook);
+    seatCamera.userData.currentLook = curLook;
+
+    if (progress < 1) {
+      povAnimationId = requestAnimationFrame(glideStep);
+    } else {
+      if (onComplete) onComplete();
+    }
+  }
+  povAnimationId = requestAnimationFrame(glideStep);
+}
+
+function updatePOVStatsHUD(seatData) {
+  const rowLetter = String.fromCharCode(65 + seatData.r);
+  const seatNum = seatData.c + 1;
+  const isVip = seatData.status === 'vip' || (seatData.r >= 2 && seatData.r <= 3);
+
+  document.getElementById('povStatSeatName').textContent = `Row ${rowLetter} · Seat ${seatNum} ${isVip ? '★ VIP' : ''}`;
+  
+  // Real 3D Euclidean distance to screen at (0, SCREEN_Y, SCREEN_Z)
+  const dx = seatData.worldX;
+  const dy = seatData.worldY + 0.65 - SCREEN_Y;
+  const dz = seatData.worldZ - SCREEN_Z;
+  const distanceMeters = Math.hypot(dx, dy, dz).toFixed(1);
+  document.getElementById('povStatDist').textContent = `${distanceMeters} m to Screen`;
+
+  const fovPercentage = Math.round(98 - (AUD_ROWS - seatData.r) * 4);
+  document.getElementById('povStatFOV').textContent = `${fovPercentage}% Optimal Immersion`;
+}
+
+function updateSeatSummaryUI() {
+  const chipContainer = document.getElementById('selectedSeatsChips');
+  const priceDisplay = document.getElementById('ticketTotalAmount');
+
+  if (selectedSeatKeys.length === 0) {
+    chipContainer.innerHTML = '<span style="font-size:13px; color:var(--dark-muted);">Click seats in 3D auditorium to select</span>';
+    priceDisplay.textContent = '₹ 0';
+    return;
+  }
+
+  let total = 0;
+  const chipsHtml = selectedSeatKeys.map(k => {
+    const [r, c] = k.split('-').map(Number);
+    const rowChar = String.fromCharCode(65 + r);
+    const isVip = (r === 2 || r === 3) && (c >= 3 && c <= 6);
+    const cost = isVip ? 340 : (r >= 4 ? 280 : 240);
+    total += cost;
+    return `<span class="seat-chip">Row ${rowChar}${c + 1} (${isVip ? 'VIP' : 'Prime'})</span>`;
+  }).join('');
+
+  chipContainer.innerHTML = chipsHtml;
+  priceDisplay.textContent = `₹ ${total}`;
+}
+
+/* --------------------------------------------------------------------------
+   7. BOOKING FLOW, SNACKS & DIGITAL PASS
+   -------------------------------------------------------------------------- */
+let activeMovieIndex = 0;
+let snackQuantities = {};
+let promoDiscount = 0;
+
+function openBooking(movieIndex = 0, launchPOVDirectly = false, customVenueName = null) {
+  initAudio();
+  playSound('click');
+  activeMovieIndex = movieIndex;
+  const movie = MOVIES[movieIndex];
+
+  document.getElementById('modalMovieTitle').textContent = `${movie.title} — Select Seats`;
+  if (customVenueName) {
+    document.getElementById('modalVenueInfo').textContent = `${customVenueName} · Screen 1 (4K Dual Laser)`;
+  }
+
+  const modalOverlay = document.getElementById('bookingModalOverlay');
+  modalOverlay.style.display = 'flex';
+  requestAnimationFrame(() => modalOverlay.classList.add('open'));
+
+  // Reset state
+  selectedSeatKeys = [];
+  snackQuantities = {};
+  promoDiscount = 0;
+  document.getElementById('promoNotice').textContent = '';
+  document.getElementById('promoInput').value = '';
+
+  generateSeatData();
+  renderSnacksMenu();
+  backToStepSeats();
+
+  // Initialize or resize 3D Auditorium
+  requestAnimationFrame(() => {
+    if (!seatScene) {
+      initAuditoriumScene();
+    } else {
+      // Re-color seats for new movie
+      seatMeshes.forEach(mesh => {
+        const key = mesh.userData.key;
+        mesh.userData.status = seatStateMap[key];
+        const hex = SEAT_COLORS[seatStateMap[key]];
+        mesh.userData.backMesh.material.color.setHex(hex);
+        mesh.userData.cushionMesh.material.color.setHex(hex);
+        if (mesh.userData.headMesh) mesh.userData.headMesh.material.color.setHex(hex);
+      });
+      updateSeatSummaryUI();
+    }
+
+    if (launchPOVDirectly) {
+      setTimeout(() => switchAuditoriumView(true), 300);
+    } else {
+      switchAuditoriumView(false);
+    }
+  });
+}
+
+function closeModal() {
+  playSound('click');
+  const modalOverlay = document.getElementById('bookingModalOverlay');
+  modalOverlay.classList.remove('open');
+  setTimeout(() => modalOverlay.style.display = 'none', 300);
+}
+
+function proceedToSnacks() {
+  if (selectedSeatKeys.length === 0) {
+    showToast("⚠️ Please select at least one seat in the auditorium first!");
+    playSound('hover');
+    return;
+  }
+  playSound('click');
+  document.getElementById('stepPanelSeats').style.display = 'none';
+  document.getElementById('stepPanelSnacks').style.display = 'block';
+  document.getElementById('stepPanelCheckout').style.display = 'none';
+
+  document.getElementById('pillSeats').classList.remove('active');
+  document.getElementById('pillSnacks').classList.add('active');
+  document.getElementById('pillCheckout').classList.remove('active');
+}
+
+function backToStepSeats() {
+  playSound('click');
+  document.getElementById('stepPanelSeats').style.display = 'block';
+  document.getElementById('stepPanelSnacks').style.display = 'none';
+  document.getElementById('stepPanelCheckout').style.display = 'none';
+
+  document.getElementById('pillSeats').classList.add('active');
+  document.getElementById('pillSnacks').classList.remove('active');
+  document.getElementById('pillCheckout').classList.remove('active');
+}
+
+function renderSnacksMenu() {
+  const container = document.getElementById('snacksListGrid');
+  container.innerHTML = SNACKS.map(s => `
+    <div class="snack-card">
+      <span class="snack-emoji">${s.emoji}</span>
+      <h4 class="snack-name">${s.name}</h4>
+      <div class="snack-price">₹ ${s.price}</div>
+      <div class="snack-qty-control">
+        <button class="qty-btn" onclick="alterSnackQty(${s.id}, -1)">–</button>
+        <span id="snackQty_${s.id}" style="font-weight:700; width:20px; display:inline-block;">0</span>
+        <button class="qty-btn" onclick="alterSnackQty(${s.id}, 1)">+</button>
+      </div>
+    </div>
+  `).join('');
+  updateSnackTotalUI();
+}
+
+function alterSnackQty(snackId, change) {
+  playSound('click');
+  const current = snackQuantities[snackId] || 0;
+  const next = Math.max(0, current + change);
+  snackQuantities[snackId] = next;
+
+  const qtyEl = document.getElementById(`snackQty_${snackId}`);
+  if (qtyEl) qtyEl.textContent = next;
+  updateSnackTotalUI();
+}
+
+function updateSnackTotalUI() {
+  let snackTotal = 0;
+  SNACKS.forEach(s => {
+    snackTotal += s.price * (snackQuantities[s.id] || 0);
+  });
+  document.getElementById('snackTotalAmount').textContent = `₹ ${snackTotal}`;
+}
+
+function proceedToCheckout() {
+  playSound('click');
+  document.getElementById('stepPanelSnacks').style.display = 'none';
+  document.getElementById('stepPanelCheckout').style.display = 'block';
+  document.getElementById('checkoutGridArea').style.display = 'grid';
+  document.getElementById('confirmedPassView').style.display = 'none';
+
+  document.getElementById('pillSnacks').classList.remove('active');
+  document.getElementById('pillCheckout').classList.add('active');
+
+  renderCheckoutSummary();
+}
+
+function backToStepSnacks() {
+  playSound('click');
+  document.getElementById('stepPanelCheckout').style.display = 'none';
+  document.getElementById('stepPanelSnacks').style.display = 'block';
+  document.getElementById('pillCheckout').classList.remove('active');
+  document.getElementById('pillSnacks').classList.add('active');
+}
+
+function renderCheckoutSummary() {
+  const movie = MOVIES[activeMovieIndex];
+
+  let ticketTotal = 0;
+  const seatsLabels = selectedSeatKeys.map(k => {
+    const [r, c] = k.split('-').map(Number);
+    const rowChar = String.fromCharCode(65 + r);
+    const isVip = (r === 2 || r === 3) && (c >= 3 && c <= 6);
+    const cost = isVip ? 340 : (r >= 4 ? 280 : 240);
+    ticketTotal += cost;
+    return `${rowChar}${c + 1}`;
+  }).join(', ');
+
+  let snackTotal = 0;
+  let snackLines = [];
+  SNACKS.forEach(s => {
+    const qty = snackQuantities[s.id] || 0;
+    if (qty > 0) {
+      snackTotal += s.price * qty;
+      snackLines.push(`<div style="display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:4px;">
+        <span>${s.name} × ${qty}</span><span>₹ ${s.price * qty}</span>
+      </div>`);
+    }
+  });
+
+  const grandTotal = Math.max(0, ticketTotal + snackTotal - promoDiscount);
+
+  document.getElementById('finalOrderBreakdown').innerHTML = `
+    <div style="font-weight:700; color:#fff; font-size:16px; margin-bottom:12px;">${movie.title}</div>
+    <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--muted); margin-bottom:8px;">
+      <span>Tickets (${selectedSeatKeys.length} Seats: ${seatsLabels})</span>
+      <span style="color:#fff; font-weight:700;">₹ ${ticketTotal}</span>
+    </div>
+    ${snackLines.join('')}
+    ${promoDiscount > 0 ? `
+      <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--success); margin-bottom:8px;">
+        <span>CINEVERSE50 Discount</span>
+        <span>- ₹ ${promoDiscount}</span>
+      </div>
+    ` : ''}
+    <div style="border-top:1px solid var(--surface-border); margin-top:12px; padding-top:12px; display:flex; justify-content:space-between; font-weight:800; font-size:18px; color:var(--cyan);">
+      <span>Total Payable</span>
+      <span>₹ ${grandTotal}</span>
+    </div>
+  `;
+}
+
+function applyPromo() {
+  const val = document.getElementById('promoInput').value.trim().toUpperCase();
+  if (val === 'CINEVERSE50') {
+    promoDiscount = 50;
+    document.getElementById('promoNotice').innerHTML = '<span style="color:var(--success)">✓ CINEVERSE50 applied! ₹ 50 off.</span>';
+    playSound('select');
+  } else {
+    document.getElementById('promoNotice').innerHTML = '<span style="color:var(--danger)">Invalid promo code</span>';
+    playSound('hover');
+  }
+  renderCheckoutSummary();
+}
+
+function confirmAndPay() {
+  playSound('click');
+  document.getElementById('checkoutGridArea').style.display = 'none';
+  document.getElementById('confirmedPassView').style.display = 'block';
+
+  const movie = MOVIES[activeMovieIndex];
+  document.getElementById('ticketMovieName').textContent = movie.title;
+
+  const seatsLabels = selectedSeatKeys.map(k => {
+    const [r, c] = k.split('-').map(Number);
+    return `Row ${String.fromCharCode(65 + r)}-${c + 1}`;
+  }).join(', ');
+  document.getElementById('ticketSeatList').textContent = seatsLabels;
+
+  const ref = 'CV-' + Math.floor(100000 + Math.random() * 900000);
+  document.getElementById('ticketBookingId').textContent = ref;
+
+  createConfettiBurst();
+  showToast("🎉 Booking Confirmed! Your 3D Seat is verified.");
+}
+
+/* --------------------------------------------------------------------------
+   8. MICRO-INTERACTIONS: 3D TILT, MAGNETIC CURSOR & PARTICLE BURSTS
+   -------------------------------------------------------------------------- */
+// Dynamic 3D Card Tilt
+document.addEventListener('mousemove', e => {
+  const card = e.target.closest('.movie-card');
+  if (!card) return;
+
+  const rect = card.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  const centerX = rect.width / 2;
+  const centerY = rect.height / 2;
+
+  const rotateX = ((y - centerY) / centerY) * -10;
+  const rotateY = ((x - centerX) / centerX) * 10;
+
+  card.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateY(-8px)`;
+});
+
+document.addEventListener('mouseleave', () => {
+  document.querySelectorAll('.movie-card').forEach(card => {
+    card.style.transform = '';
+  });
+}, true);
+
+// Particle Bursts on Every Button Click
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.btn, .time-slot-btn, .filter-chip, .card-action-btn, .sfx-toggle');
+  if (!btn) return;
+
+  playSound('click');
+
+  // Spawn Ripple
+  const rect = btn.getBoundingClientRect();
+  const ripple = document.createElement('span');
+  ripple.className = 'btn-ripple';
+  const size = Math.max(rect.width, rect.height) * 1.5;
+  ripple.style.width = ripple.style.height = `${size}px`;
+  ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+  ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+  btn.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 600);
+
+  // Spawn 14 Micro Particle Sparks
+  spawnSparks(e.clientX, e.clientY);
+});
+
+function spawnSparks(x, y) {
+  const burst = document.createElement('div');
+  burst.className = 'particle-burst';
+  burst.style.left = `${x}px`;
+  burst.style.top = `${y}px`;
+  document.body.appendChild(burst);
+
+  const colors = ['#8B2EFF', '#00F0FF', '#D7A6FF', '#FFFFFF', '#FFB800'];
+  for (let i = 0; i < 14; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'spark-dot';
+    const angle = (Math.PI * 2 / 14) * i + Math.random() * 0.4;
+    const dist = 30 + Math.random() * 45;
+    const tx = Math.cos(angle) * dist;
+    const ty = Math.sin(angle) * dist;
+
+    dot.style.setProperty('--tx', `${tx}px`);
+    dot.style.setProperty('--ty', `${ty}px`);
+    dot.style.background = colors[Math.floor(Math.random() * colors.length)];
+    burst.appendChild(dot);
+  }
+
+  setTimeout(() => burst.remove(), 800);
+}
+
+function createConfettiBurst() {
+  const count = 30;
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => {
+      spawnSparks(
+        window.innerWidth * 0.3 + Math.random() * window.innerWidth * 0.4,
+        window.innerHeight * 0.3 + Math.random() * window.innerHeight * 0.4
+      );
+    }, i * 25);
+  }
+}
+
+// Scroll Progress Tracker & Sticky Navbar blur
+window.addEventListener('scroll', () => {
+  const winScroll = document.documentElement.scrollTop;
+  const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+  const scrolled = (winScroll / height) * 100;
+  document.getElementById('scroll-progress').style.width = `${scrolled}%`;
+
+  const nav = document.getElementById('navbar');
+  if (winScroll > 40) {
+    nav.classList.add('scrolled');
+  } else {
+    nav.classList.remove('scrolled');
+  }
+});
+
+// Toast Notifier
+let toastTimer = null;
+function showToast(msg) {
+  const toast = document.getElementById('globalToast');
+  document.getElementById('toastMsg').textContent = msg;
+  toast.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('visible');
+  }, 3200);
+}
+
+// Location Selector Cycle
+const LOCATIONS = ["Chennai · OMR", "Chennai · Grand Marina", "Bengaluru · Koramangala", "Mumbai · Bandra"];
+let locIndex = 0;
+function cycleLocation() {
+  playSound('click');
+  locIndex = (locIndex + 1) % LOCATIONS.length;
+  document.getElementById('currentLocText').textContent = LOCATIONS[locIndex];
+  showToast(`📍 Switched location to ${LOCATIONS[locIndex]}`);
+}
+
+/* --------------------------------------------------------------------------
+   9. INITIALIZATION
+   -------------------------------------------------------------------------- */
+window.addEventListener('DOMContentLoaded', () => {
+  renderMoviesList('all');
+  renderTheatresList('all');
+  renderUpcoming();
+  initHeroScene();
+});
+</script>
+</body>
+</html>
